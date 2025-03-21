@@ -93,7 +93,7 @@ def save_customer_request_db(request: CustomerRequest):
             redis_client.publish("new_order_arrived", params[0])
             logging.info(f"Order {params[0]} inserted successfully.")
             db.close()
-            return {"status": "success", "order_id": params[0]}
+            return {"status": "success", "message": f"Order {params[0]} inserted successfully."}
         except Exception as e:
             logging.error(f"Failed to insert order {params[0]}: {e}")
             db.close()
@@ -134,7 +134,7 @@ def fetch_orders(request: FetchOrders):
                     "description": row[8]
                 })
 
-            return {"status": "success", "orders": orders}
+            return {"status": "success", "message": f"Fetched {len(orders)} orders."}
         except Exception as e:
             logging.error(f"Failed to fetch orders for worker {request.worker_id}: {e}")
             db.close()
@@ -175,7 +175,7 @@ def finish_order(request: FinishOrder):
                 redis_client.publish("worker_available", worker_id[0])
                 logging.info(f"Order {request.order_id} finished successfully.")
                 db.close()
-                return {"status": "success"}
+                return {"status": "success", "message": f"Order {request.order_id} finished successfully."}
             else:
                 db.close()
                 return {"status": "error", "message": "Order not found."}
