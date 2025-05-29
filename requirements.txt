@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+requests
+python-dotenv
+google-cloud-storage
+psycopg2-binary
+python-jose
+pydantic
+python-multipart
+google-cloud-aiplatform
