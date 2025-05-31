@@ -5,9 +5,9 @@ import os
 import dotenv
 
 dotenv.load_dotenv('.env')
-# INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME")
-# HOST= f"/cloudsql/{INSTANCE_CONNECTION_NAME}"
-HOST = os.getenv('DB_HOST')
+INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME")
+HOST= f"/cloudsql/{INSTANCE_CONNECTION_NAME}"
+# HOST = os.getenv('DB_HOST')
 DBNAME = os.getenv('DB_NAME')
 USER = os.getenv('DB_USER')
 PASSWORD = os.getenv('DB_PASSWORD')
