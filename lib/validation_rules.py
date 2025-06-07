@@ -47,8 +47,9 @@ def validate_address(address: str) -> bool:
     Validate a Polish address.
     A simple regex to check for a valid address format.
     This is a basic validation and may need to be adjusted for more complex cases.
+    Allows for double quotes (").
     """
-    return bool(re.match(r'^[A-Za-zżźćńółęąśŻŹĆĄŚĘŁÓŃ0-9\s,.-]+$', address))
+    return bool(re.match(r'^[A-Za-zżźćńółęąśŻŹĆĄŚĘŁÓŃ0-9\s,.\-"]+$', address))
 
 def validate_postal_code(postal_code: str) -> bool:
     """

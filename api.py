@@ -300,7 +300,7 @@ async def create_order(
 Fetching orders for a worker endpoint
 """
 @app.post("/fetch_orders/")
-def fetch_orders(auth_user: AuthUser = Depends(verify_token)):
+async def fetch_orders(auth_user: AuthUser = Depends(verify_token)):
     # Tylko OWNER i WORKER mają dostęp
     if auth_user.user_role not in ["OWNER", "WORKER"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -367,7 +367,7 @@ def fetch_orders(auth_user: AuthUser = Depends(verify_token)):
 Fetching all orders endpoint
 """   
 @app.get("/all_orders/")
-def get_all_orders(auth_user: AuthUser = Depends(verify_token)):
+async def get_all_orders(auth_user: AuthUser = Depends(verify_token)):
     # Tylko OWNER ma dostęp do wszystkich zleceń
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can view all orders.")
@@ -419,7 +419,7 @@ def get_all_orders(auth_user: AuthUser = Depends(verify_token)):
 Pobieranie listy wszystkich pracowników dla menu rozwijanego
 """
 @app.get("/get_all_employees/")
-def get_all_employees(auth_user: AuthUser = Depends(verify_token)):
+async def get_all_employees(auth_user: AuthUser = Depends(verify_token)):
     # Tylko OWNER ma dostęp
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can view employees.")
@@ -621,7 +621,7 @@ async def update_order(
 Getting details of a specific order for editing
 """
 @app.get("/get_order/{order_id}")
-def get_order(order_id: str, auth_user: AuthUser = Depends(verify_token)):
+async def get_order(order_id: str, auth_user: AuthUser = Depends(verify_token)):
     # Only OWNER can view order details for editing
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can view order details.")
@@ -702,7 +702,7 @@ Fetching all working days for a worker in full availability
 for leave requests endpoint
 """
 @app.post("/fetch_working_days/")
-def fetch_working_days(
+async def fetch_working_days(
     auth_user: AuthUser = Depends(verify_token)
 ):
     # Tylko OWNER i WORKER mają dostęp
@@ -739,7 +739,7 @@ def fetch_working_days(
 Create a leave request endpoint
 """
 @app.post("/create_leave_request/")
-def create_leave_request(
+async def create_leave_request(
     work_date: date = Form(...),
     reason: str = Form(...),
     auth_user: AuthUser = Depends(verify_token)
@@ -764,7 +764,7 @@ def create_leave_request(
 Reviewing leave requests endpoint
 """
 @app.post("/review_leave_request/")
-def review_leave_request(
+async def review_leave_request(
     request_id: int = Form(...),
     action: str = Form(...),  # 'approve' or 'reject'
     auth_user: AuthUser = Depends(verify_token)
@@ -813,7 +813,7 @@ def review_leave_request(
 Get pending leave requests endpoint
 """
 @app.get("/pending_leave_requests/")
-def get_pending_leave_requests(auth_user: AuthUser = Depends(verify_token)):
+async def get_pending_leave_requests(auth_user: AuthUser = Depends(verify_token)):
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Only owners can view leave requests.")
 
@@ -844,7 +844,7 @@ def get_pending_leave_requests(auth_user: AuthUser = Depends(verify_token)):
         return {"status": "error", "message": str(e)}
 
 @app.get("/check_role/")
-def check_role(auth_user: AuthUser = Depends(verify_token)):
+async def check_role(auth_user: AuthUser = Depends(verify_token)):
     return {
         "status": "success",
         "user_id": auth_user.user_id,
@@ -855,7 +855,7 @@ def check_role(auth_user: AuthUser = Depends(verify_token)):
 Fetching all orders for address endpoint
 """
 @app.post("/fetch_orders_on_addr/")
-def fetch_orders_on_addr(
+async def fetch_orders_on_addr(
     city: str = Form(...),
     street: Optional[str] = Form(None),
     post_code: Optional[str] = Form(None),
@@ -919,7 +919,7 @@ def fetch_orders_on_addr(
 Fetching available cities endpoint
 """
 @app.get("/fetch_cities/")
-def fetch_cities():
+async def fetch_cities():
     db = DatabaseManager()
     try:
         rows = db.fetch_all("SELECT DISTINCT city FROM employees;")
@@ -942,7 +942,7 @@ def fetch_cities():
 Finishing order endpoint
 """       
 @app.post("/finish_order/")
-def finish_order(
+async def finish_order(
     request: FinishOrder,
     auth_user: AuthUser = Depends(verify_token)
 ):
@@ -1064,7 +1064,7 @@ def assign_order_to_worker(
 ) -> date | None:
     db = DatabaseManager()
     try:
-        # 1. Pobranie pracowników...
+        # 1. Pobranie pracowników z danego miasta
         rows = db.fetch_all("""
             SELECT user_id, worker_role
               FROM employees
@@ -1075,60 +1075,170 @@ def assign_order_to_worker(
             logging.info(f"Brak pracowników w {order_city}")
             return None
 
-        # 2. Inicjalizacja harmonogramu: nawet nowi pracownicy dostają 30 dni roboczych
+        # 2. Inicjalizacja harmonogramu dla wszystkich pracowników
         for uid, _ in employees:
             ensure_worker_has_schedule(db, uid, days_required=30, slots_per_day=6)
 
-        # 3. Pobranie wolnych slotów
-        user_ids = tuple(uid for uid, _ in employees)
-        schedules = db.fetch_all("""
-            SELECT user_id, work_date
-              FROM schedule
-             WHERE work_date >= %s
-               AND available_slots > 0
-               AND user_id IN %s
-             ORDER BY work_date ASC
-        """, (date.today(), user_ids))
+        # 3. Podział pracowników na OWNER i WORKER
+        owners = [uid for uid, role in employees if role == "OWNER"]
+        workers = [uid for uid, role in employees if role == "WORKER"]
         
-        worker_av = defaultdict(list)
-        for uid, wd in schedules:
-            worker_av[str(uid)].append(wd)
-
-        # 4. Wybór pracownika wg roli (OWNER > WORKER)
-        by_role = {"OWNER": [], "WORKER": []}
-        for uid, role in employees:
-            if uid in worker_av:
-                by_role[role].append(uid)
-
-        assigned = next((by_role[r][0] for r in ("OWNER","WORKER") if by_role[r]), None)
-        if not assigned:
-            logging.info(f"Brak slotów dla {order_id}")
-            return None
-
-        # 5. Wybór daty wg priorytetu
-        dates = sorted(worker_av[assigned])
-        if urgency.lower().startswith("pilne"):
-            work_date = dates[0]
+        # 4. Sprawdzamy dostępność szefów (OWNER)
+        is_urgent = urgency.lower().startswith("pilne")
+        
+        # Sprawdzamy zlecenia pilne - dla nich sprawdzamy najbliższy możliwy termin u szefa
+        if is_urgent:
+            owner_slots = {}
+            for owner_id in owners:
+                # Pobieramy najbliższy dostępny slot dla szefa
+                nearest_slot = db.fetch_one("""
+                    SELECT work_date, available_slots
+                    FROM schedule
+                    WHERE user_id = %s
+                      AND work_date >= %s
+                      AND available_slots > 0
+                    ORDER BY work_date ASC
+                    LIMIT 1
+                """, (owner_id, date.today()))
+                
+                if nearest_slot:
+                    owner_slots[owner_id] = nearest_slot
+            
+            # Jeśli jakiś szef ma dostępny slot - przydzielamy jemu
+            if owner_slots:
+                # Wybieramy szefa z najwcześniejszą datą
+                best_owner = min(owner_slots.items(), key=lambda x: x[1][0])
+                assigned_id = best_owner[0]
+                work_date = best_owner[1][0]
+            else:
+                # Jeśli żaden szef nie ma slotów, szukamy wśród pracowników
+                worker_slots = {}
+                for worker_id in workers:
+                    nearest_slot = db.fetch_one("""
+                        SELECT work_date, available_slots
+                        FROM schedule
+                        WHERE user_id = %s
+                          AND work_date >= %s
+                          AND available_slots > 0
+                        ORDER BY work_date ASC
+                        LIMIT 1
+                    """, (worker_id, date.today()))
+                    
+                    if nearest_slot:
+                        worker_slots[worker_id] = nearest_slot
+                
+                if not worker_slots:
+                    logging.info(f"Brak dostępnych slotów dla pilnego zlecenia {order_id}")
+                    return None
+                
+                # Wybieramy pracownika z najwcześniejszą datą
+                best_worker = min(worker_slots.items(), key=lambda x: x[1][0])
+                assigned_id = best_worker[0]
+                work_date = best_worker[1][0]
+        
+        # Dla zleceń niepilnych - najpierw próbujemy wypełnić dni szefa
         else:
             cutoff = date.today() + timedelta(days=low_priority_delay)
-            future = [d for d in dates if d >= cutoff]
-            work_date = future[0] if future else dates[-1]
-
+            
+            # Sprawdzamy szefów - czy mają dostępne sloty po opóźnieniu
+            owner_future_slots = {}
+            for owner_id in owners:
+                future_slot = db.fetch_one("""
+                    SELECT work_date, available_slots
+                    FROM schedule
+                    WHERE user_id = %s
+                      AND work_date >= %s
+                      AND available_slots > 0
+                    ORDER BY work_date ASC
+                    LIMIT 1
+                """, (owner_id, cutoff))
+                
+                if future_slot:
+                    owner_future_slots[owner_id] = future_slot
+            
+            # Jeśli jakiś szef ma przyszłe sloty - przydzielamy jemu
+            if owner_future_slots:
+                # Wybieramy szefa z najwcześniejszą przyszłą datą
+                best_owner = min(owner_future_slots.items(), key=lambda x: x[1][0])
+                assigned_id = best_owner[0]
+                work_date = best_owner[1][0]
+            else:
+                # Sprawdzamy pracowników, jeśli żaden szef nie ma slotów
+                worker_future_slots = {}
+                for worker_id in workers:
+                    future_slot = db.fetch_one("""
+                        SELECT work_date, available_slots
+                        FROM schedule
+                        WHERE user_id = %s
+                          AND work_date >= %s
+                          AND available_slots > 0
+                        ORDER BY work_date ASC
+                        LIMIT 1
+                    """, (worker_id, cutoff))
+                    
+                    if future_slot:
+                        worker_future_slots[worker_id] = future_slot
+                
+                # Jeśli nikt nie ma przyszłych slotów, szukamy jakichkolwiek
+                if not worker_future_slots:
+                    # Próbujemy szefów jeszcze raz - jakiekolwiek sloty
+                    for owner_id in owners:
+                        any_slot = db.fetch_one("""
+                            SELECT work_date, available_slots
+                            FROM schedule
+                            WHERE user_id = %s
+                              AND work_date >= %s
+                              AND available_slots > 0
+                            ORDER BY work_date ASC
+                            LIMIT 1
+                        """, (owner_id, date.today()))
+                        
+                        if any_slot:
+                            assigned_id = owner_id
+                            work_date = any_slot[0]
+                            break
+                    else:
+                        # Jeśli nawet szefowie nie mają slotów, próbujemy pracowników
+                        for worker_id in workers:
+                            any_slot = db.fetch_one("""
+                                SELECT work_date, available_slots
+                                FROM schedule
+                                WHERE user_id = %s
+                                  AND work_date >= %s
+                                  AND available_slots > 0
+                                ORDER BY work_date ASC
+                                LIMIT 1
+                            """, (worker_id, date.today()))
+                            
+                            if any_slot:
+                                assigned_id = worker_id
+                                work_date = any_slot[0]
+                                break
+                        else:
+                            logging.info(f"Brak dostępnych slotów dla niepilnego zlecenia {order_id}")
+                            return None
+                else:
+                    # Wybieramy pracownika z najwcześniejszą przyszłą datą
+                    best_worker = min(worker_future_slots.items(), key=lambda x: x[1][0])
+                    assigned_id = best_worker[0]
+                    work_date = best_worker[1][0]
+        
         # 6. Rezerwacja slotu i aktualizacja zamówienia
         db.execute_query("""
             UPDATE schedule
                SET available_slots = available_slots - 1
              WHERE user_id = %s AND work_date = %s
-        """, (assigned, work_date))
+        """, (assigned_id, work_date))
+        
         db.execute_query("""
             UPDATE orders
                SET assigned_to = %s,
                    order_status = 'In progress',
                    appointment_date = %s
              WHERE order_id = %s
-        """, (assigned, work_date, order_id))
+        """, (assigned_id, work_date, order_id))
 
-        logging.info(f"{order_id} -> {assigned} na {work_date}")
+        logging.info(f"{order_id} -> {assigned_id} na {work_date}")
         return work_date
 
     except Exception as e:
