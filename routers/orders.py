@@ -1,19 +1,90 @@
+"""!
+@file orders.py
+@brief Moduł obsługujący routing dla operacji związanych z zamówieniami
+@details Zapewnia endpointy API do tworzenia zamówień, pobierania listy zamówień, aktualizacji zamówień i zarządzania ich statusem.
+        Moduł implementuje logikę biznesową potrzebną do obsługi całego cyklu życia zamówienia w systemie.
+@author Piotr
+@date 2023
+"""
 from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
+"""!
+@brief Komponenty FastAPI do obsługi routingu, autoryzacji i przesyłania plików
+"""
+
 from datetime import datetime
 import uuid
 import os
 import logging
+"""!
+@brief Biblioteki systemowe i pomocnicze
+@details datetime - obsługa dat i czasu
+        uuid - generowanie unikalnych identyfikatorów
+        os - operacje na systemie plików i zmiennych środowiskowych
+        logging - rejestrowanie zdarzeń i błędów
+"""
+
 from google.cloud import storage
+"""!
+@brief Klient Google Cloud Storage do obsługi plików w chmurze
+"""
+
 from typing import Optional
+"""!
+@brief Typy do adnotacji parametrów opcjonalnych
+"""
 
 from config import EMAIL, EMAIL_PASSWORD, BUCKET_NAME, IMAGE_BASE_URL
+"""!
+@brief Importowanie konfiguracji z pliku ustawień
+@details EMAIL - adres email do wysyłania powiadomień
+        EMAIL_PASSWORD - hasło do konta email
+        BUCKET_NAME - nazwa bucketa Google Cloud Storage
+        IMAGE_BASE_URL - bazowy URL do zdjęć w chmurze
+"""
 
 from lib.auth import verify_token
+"""
+Moduł weryfikacji tokenów uwierzytelniających.
+
+@note Zapewnia mechanizm autoryzacji żądań do API.
+"""
+
 from lib.db_conn import DatabaseManager
+"""
+Manager połączeń z bazą danych.
+
+@note Obsługuje komunikację z bazą PostgreSQL.
+"""
+
 from lib.email_sender import GmailSender
+"""
+Moduł do wysyłania wiadomości email przez Gmail.
+
+@note Umożliwia wysyłanie powiadomień do klientów.
+"""
+
 from lib.order_classifier import OrderClassifier
+"""
+Klasyfikator zamówień wykorzystujący sztuczną inteligencję.
+
+@note Wykorzystuje modele Vertex AI do klasyfikacji i wyceny zamówień.
+"""
+
 from lib.order_assigner import assign_order_to_worker
+"""
+Funkcja przydzielająca zamówienie do odpowiedniego pracownika.
+
+@note Uwzględnia lokalizację, priorytet i dostępność pracowników.
+"""
+
 from models.models import AuthUser, FinishOrder
+"""
+Modele danych używane w API.
+
+@note AuthUser - model uwierzytelnionego użytkownika
+@note FinishOrder - model do zakończenia zamówienia
+"""
+
 from lib.validation_rules import (
     validate_nip,
     validate_name_surname,
@@ -23,8 +94,28 @@ from lib.validation_rules import (
     validate_email,
     validate_house_number
 )
+"""!
+@brief Funkcje walidacyjne dla danych wejściowych
+@details validate_nip - sprawdza poprawność numeru NIP
+        validate_name_surname - sprawdza poprawność imienia i nazwiska
+        validate_address - sprawdza poprawność adresu
+        validate_postal_code - sprawdza poprawność kodu pocztowego
+        validate_phone - sprawdza poprawność numeru telefonu
+        validate_email - sprawdza poprawność adresu email
+        validate_house_number - sprawdza poprawność numeru budynku
+"""
 
 router = APIRouter()
+"""!
+@brief Router FastAPI do obsługi tras związanych z zamówieniami
+@details Router zawiera wszystkie endpointy API związane z zarządzaniem zamówieniami:
+        - tworzenie nowych zamówień
+        - pobieranie zamówień dla pracownika
+        - pobieranie wszystkich zamówień
+        - aktualizację zamówień
+        - pobieranie szczegółów zamówienia
+        - kończenie zamówień
+"""
 
 """
 Creating order endpoint -

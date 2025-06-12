@@ -1,20 +1,71 @@
+"""!
+@file schedule.py
+@brief Moduł obsługujący routing dla operacji związanych z harmonogramem pracy
+@details Zapewnia endpointy API do zarządzania harmonogramem pracy pracowników, wnioskami urlopowymi 
+         i dostępnością czasową dla realizacji zadań.
+@author Piotr
+@date 2023
+"""
 from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
+"""!
+@brief Komponenty FastAPI do obsługi routingu, autoryzacji i przesyłania formularzy
+"""
+
 from datetime import datetime
 import uuid
 import os
 from datetime import date
 import logging
+"""!
+@brief Biblioteki standardowe do obsługi dat, identyfikatorów i logowania
+@details datetime - obsługa dat i czasu
+        uuid - generowanie unikalnych identyfikatorów
+        os - operacje na systemie plików
+        date - praca z datami
+        logging - rejestrowanie zdarzeń i błędów
+"""
+
 from google.cloud import storage
 from typing import Optional
+"""!
+@brief Biblioteki do obsługi przechowywania plików i typowania zmiennych
+"""
 
 from config import EMAIL, EMAIL_PASSWORD, BUCKET_NAME, IMAGE_BASE_URL
+"""!
+@brief Konfiguracja systemu importowana z pliku config.py
+"""
 
 from lib.auth import verify_token
+"""!
+@brief Funkcje uwierzytelniania i weryfikacji tokenów dostępu
+"""
+
 from lib.db_conn import DatabaseManager
+"""!
+@brief Manager połączeń z bazą danych
+"""
+
 from lib.email_sender import GmailSender
+"""!
+@brief Moduł do wysyłania wiadomości email
+"""
+
 from lib.order_classifier import OrderClassifier
+"""!
+@brief Klasyfikator zamówień wykorzystujący AI
+"""
+
 from lib.order_assigner import assign_order_to_worker
+"""!
+@brief Funkcja przydzielająca zlecenia pracownikom
+"""
+
 from models.models import AuthUser, FinishOrder
+"""!
+@brief Modele danych używane w API
+"""
+
 from lib.validation_rules import (
     validate_nip,
     validate_name_surname,
@@ -24,13 +75,23 @@ from lib.validation_rules import (
     validate_email,
     validate_house_number
 )
+"""!
+@brief Funkcje walidacyjne dla danych wprowadzanych przez użytkowników
+"""
 
 router = APIRouter()
-
-
+"""!
+@brief Router FastAPI do obsługi endpointów związanych z harmonogramem
+@details Router definiuje ścieżki API do zarządzania dniami pracy i wnioskami urlopowymi
 """
-Fetching all working days for a worker in full availability
-for leave requests endpoint
+
+
+"""!
+@brief Pobieranie dni pracy z pełną dostępnością dla pracownika
+@details Endpoint zwraca listę dni, w których pracownik ma pełną dostępność (6 slotów),
+         co umożliwia złożenie wniosku urlopowego na te dni.
+@param auth_user Uwierzytelniony użytkownik przekazywany przez Depends(verify_token)
+@return JSON z listą dostępnych dni pracy lub komunikatem błędu
 """
 @router.post("/fetch_working_days/")
 async def fetch_working_days(
@@ -75,6 +136,14 @@ async def create_leave_request(
     reason: str = Form(...),
     auth_user: AuthUser = Depends(verify_token)
 ):
+    """!
+    @brief Tworzenie wniosku urlopowego
+    @details Endpoint umożliwia pracownikom tworzenie wniosków o urlop na wybrany dzień roboczy
+    @param work_date Data dnia, na który składany jest wniosek urlopowy
+    @param reason Powód wniosku urlopowego
+    @param auth_user Uwierzytelniony użytkownik przekazywany przez Depends(verify_token)
+    @return JSON ze statusem operacji i komunikatem
+    """
     if auth_user.user_role not in ["OWNER", "WORKER"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
         
@@ -100,6 +169,15 @@ async def review_leave_request(
     action: str = Form(...),  # 'approve' or 'reject'
     auth_user: AuthUser = Depends(verify_token)
 ):
+    """!
+    @brief Rozpatrywanie wniosków urlopowych przez właściciela
+    @details Endpoint umożliwia właścicielowi zaakceptowanie lub odrzucenie wniosku urlopowego pracownika.
+             W przypadku zaakceptowania, dostępność pracownika w danym dniu jest ustawiana na 0.
+    @param request_id Identyfikator wniosku urlopowego
+    @param action Akcja do wykonania - 'approve' (zaakceptuj) lub 'reject' (odrzuć)
+    @param auth_user Uwierzytelniony użytkownik przekazywany przez Depends(verify_token)
+    @return JSON ze statusem operacji i komunikatem
+    """
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Only owners can review leave requests.")
 
@@ -145,6 +223,12 @@ Get pending leave requests endpoint
 """
 @router.get("/pending_leave_requests/")
 async def get_pending_leave_requests(auth_user: AuthUser = Depends(verify_token)):
+    """!
+    @brief Pobieranie oczekujących wniosków urlopowych
+    @details Endpoint zwraca listę wszystkich oczekujących wniosków urlopowych, które wymagają decyzji właściciela
+    @param auth_user Uwierzytelniony użytkownik przekazywany przez Depends(verify_token)
+    @return JSON z listą wniosków urlopowych lub komunikatem błędu
+    """
     if auth_user.user_role != "OWNER":
         raise HTTPException(status_code=403, detail="Only owners can view leave requests.")
 
@@ -174,6 +258,12 @@ async def get_pending_leave_requests(auth_user: AuthUser = Depends(verify_token)
         db.close()
         return {"status": "error", "message": str(e)}
 
+"""!
+@brief Sprawdzanie roli użytkownika
+@details Endpoint zwraca rolę aktualnie zalogowanego użytkownika
+@param auth_user Uwierzytelniony użytkownik przekazywany przez Depends(verify_token)
+@return JSON z identyfikatorem użytkownika i jego rolą w systemie
+"""
 @router.get("/check_role/")
 async def check_role(auth_user: AuthUser = Depends(verify_token)):
     return {
@@ -181,7 +271,7 @@ async def check_role(auth_user: AuthUser = Depends(verify_token)):
         "user_id": auth_user.user_id,
         "role": auth_user.user_role
     }
-    
+
 
 
 

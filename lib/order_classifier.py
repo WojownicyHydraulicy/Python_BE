@@ -1,3 +1,11 @@
+"""!
+@file order_classifier.py
+@brief Moduł klasyfikacji i wyceny zleceń hydraulicznych
+@details Zawiera klasę OrderClassifier, która wykorzystuje model AI Google Vertex do oceny trudności,
+         wyceny i weryfikacji zleceń hydraulicznych na podstawie opisu i zdjęcia.
+@author Piotr
+@date 2023
+"""
 import requests
 from io import BytesIO
 from vertexai.vision_models import Image
@@ -8,14 +16,30 @@ import os
 import json
 
 class OrderClassifier:
-    """Klasa do wyceny zgłoszeń klienckich."""
+    """!
+    @brief Klasa do wyceny i oceny trudności zgłoszeń klienckich dotyczących usług hydraulicznych
+    @details Wykorzystuje model AI z Google Vertex AI do analizy opisów i zdjęć zgłoszeń hydraulicznych.
+             Zwraca kategorię trudności, przedział cenowy, odpowiedź dla klienta 
+             oraz informację o poprawności zgłoszenia.
+    """
 
     def __init__(self, project_id, location, model_name):
+        """!
+        @brief Konstruktor klasy OrderClassifier
+        @param project_id Identyfikator projektu Google Cloud
+        @param location Region, w którym znajduje się model AI
+        @param model_name Nazwa modelu Gemini do wykorzystania
+        """
         self.project_id = project_id
         self.location = location
         self.model_name = model_name
 
     def initialize(self):
+        """!
+        @brief Inicjalizuje połączenie z Google Vertex AI i ładuje model
+        @details Tworzy instancję modelu generatywnego Gemini dostępną do użycia
+        @exception Exception Wyrzuca wyjątek w przypadku błędu inicjalizacji modelu
+        """
         try:
             vertexai.init(project=self.project_id, location=self.location)
             self.model = GenerativeModel(self.model_name)
@@ -25,15 +49,21 @@ class OrderClassifier:
             raise e  # Podbij błąd dalej jeśli chcesz go obsłużyć wyżej
 
     def evaluate_difficulty(self, prompt_text: str, image_url: str = None) -> dict:
-        """
-        Ocena trudności usterki hydraulicznej na podstawie opisu i ewentualnego zdjęcia.
-
-        Args:
-            prompt_text: Opis usterki podany przez klienta.
-            image_url: (Opcjonalnie) URL do obrazu usterki.
-
-        Returns:
-            dict: JSON zawierający flaw_category i client_response.
+        """!
+        @brief Ocenia trudność usterki hydraulicznej i proponuje wycenę
+        @details Analizuje opis usterki podany przez klienta oraz opcjonalne zdjęcie.
+                 Na podstawie tych danych określa poziom trudności naprawy, szacunkową cenę
+                 i generuje odpowiedź dla klienta. Dodatkowo weryfikuje, czy zgłoszenie
+                 jest poprawne i dotyczy faktycznie hydrauliki.
+        
+        @param prompt_text Tekstowy opis usterki podany przez klienta
+        @param image_url Opcjonalny URL do zdjęcia usterki
+        
+        @return Słownik zawierający:
+                - flaw_category: kategoria trudności (NISKI, ŚREDNI, WYSOKI, BARDZO WYSOKI, WYCENA NIEMOŻLIWA)
+                - price: przedział cenowy naprawy
+                - client_response: tekst odpowiedzi dla klienta
+                - is_valid_request: wartość logiczna określająca, czy zgłoszenie jest prawidłowe
         """
         inputs = []
 

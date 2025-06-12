@@ -51,7 +51,15 @@ class GmailSender:
                 except Exception as e:
                     logging.warning(f"Failed to close SMTP connection: {e}")
                 
-        
+    """!
+    @brief Wysyła email z potwierdzeniem złożenia zamówienia na naprawę hydrauliczną
+    @details Tworzy i wysyła wiadomość email z szablonu HTML zawierającą potwierdzenie
+             przyjęcia zamówienia na naprawę hydrauliczną.
+    @param recipient Adres email odbiorcy wiadomości
+    @param order_id Unikalny identyfikator zamówienia
+    @return Słownik zawierający status wysyłki ('success' lub 'error') oraz wiadomość
+    @exception Exception Wszelkie wyjątki obsługiwane są wewnątrz metody send_email
+    """
     def send_order_confirmation(self, recipient: str, order_id: str):
         subject = f"Potwierdzenie złożenia na naprawę hydrauliczną"
         body = f"""
@@ -68,6 +76,15 @@ class GmailSender:
         """
         return self.send_email(recipient, subject, body)
     
+    """!
+    @brief Wysyła email z informacją o zakończeniu naprawy hydraulicznej
+    @details Tworzy i wysyła wiadomość email z szablonu HTML zawierającą informację
+             o pomyślnym zakończeniu zlecenia naprawy hydraulicznej wraz z prośbą o opinię.
+    @param recipient Adres email odbiorcy wiadomości
+    @param order_id Unikalny identyfikator zakończonego zamówienia
+    @return Słownik zawierający status wysyłki ('success' lub 'error') oraz wiadomość
+    @exception Exception Wszelkie wyjątki obsługiwane są wewnątrz metody send_email
+    """
     def send_order_completed(self, recipient: str, order_id: str):
         subject = f"Zakończenie naprawy hydraulicznej – {order_id}"
         body = f"""

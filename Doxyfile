@@ -1,0 +1,38 @@
+# Doxygen configuration file for generating documentation for a Python project.
+
+# General configuration options
+PROJECT_NAME           = "Hydropol Backend"
+PROJECT_LOGO           = ""  # Możesz dodać ścieżkę do logo, jeśli chcesz
+OUTPUT_DIRECTORY       = "docs"  # Katalog, w którym wygenerowane zostaną pliki dokumentacji
+RECURSIVE              = YES  # Rekurencyjne przetwarzanie podkatalogów
+EXCLUDE                = ""  # Możesz dodać katalogi lub pliki do wykluczenia
+
+# Specify the file extensions to be processed (Python)
+FILE_PATTERNS          = *.py  # Przetwarzanie plików .py
+
+# Documentation generation
+GENERATE_LATEX          = NO  # Jeśli nie chcesz generować dokumentacji w formacie LaTeX
+GENERATE_HTML           = YES  # Generowanie dokumentacji w formacie HTML
+
+# Enable automatic Doxygen-style comments parsing
+EXTRACT_ALL            = YES  # Dokumentacja wszystkich funkcji, metod, klas
+
+# Python-specific settings
+OPTIMIZE_OUTPUT_FOR_C  = NO  # Nie jest to projekt C/C++, ustaw na NO
+PYTHON_DOCSTRING       = YES  # Obsługuje dokumentację w formacie docstring
+RECURSIVE              = YES  # Przetwarzanie plików w podkatalogach
+
+# Configure how Doxygen handles files and directories
+INPUT                  = .  # Rozpocznij skanowanie od bieżącego katalogu
+
+# Optional: Set the file to be used for generating documentation
+FILE_PATTERNS          = *.py
+
+# Handling of comments
+EXTRACT_PRIVATE        = YES  # Uwzględniaj prywatne metody i zmienne
+
+# Documentation examples
+EXAMPLES               = ""  # Przykłady mogą zostać dodane, jeśli masz folder z przykładami
+
+# Brief documentation for your project (this will appear in the main page of the documentation)
+BRIEF_MEMBER_DESC      = YES  # Opis członków klas w postaci krótkich notatek

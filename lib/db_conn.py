@@ -67,7 +67,15 @@ class DatabaseManager:
             self.connection.rollback()
 
     def fetch_one(self, query, params=None):
-        """Fetches a single result from a query."""
+        """!
+        @brief Pobiera pojedynczy wynik zapytania SQL
+        @details Wykonuje zapytanie SQL i zwraca pierwszy wiersz z wyników.
+                 Może przyjąć opcjonalne parametry zapytania.
+        @param query Zapytanie SQL do wykonania
+        @param params Opcjonalne parametry zapytania (domyślnie None)
+        @return Pierwszy wiersz wyników zapytania lub None w przypadku błędu
+        @exception Exception Loguje błędy wykonania zapytania
+        """
         try:
             if params:
                 self.cursor.execute(query, params)
@@ -80,7 +88,15 @@ class DatabaseManager:
             return None
 
     def fetch_all(self, query, params=None):
-        """Fetches all results from a query."""
+        """!
+        @brief Pobiera wszystkie wyniki zapytania SQL
+        @details Wykonuje zapytanie SQL i zwraca wszystkie wiersze wyników.
+                 Może przyjąć opcjonalne parametry zapytania.
+        @param query Zapytanie SQL do wykonania
+        @param params Opcjonalne parametry zapytania (domyślnie None)
+        @return Lista wszystkich wierszy wyników zapytania lub pusta lista w przypadku błędu
+        @exception Exception Loguje błędy wykonania zapytania
+        """
         try:
             if params:
                 self.cursor.execute(query, params)
@@ -93,7 +109,11 @@ class DatabaseManager:
             return []
 
     def close(self):
-        """Closes the database connection."""
+        """!
+        @brief Zamyka połączenie z bazą danych
+        @details Zamyka kursor i połączenie z bazą danych, zwalniając zasoby.
+                 Funkcja powinna być wywołana po zakończeniu operacji na bazie danych.
+        """
         if self.cursor:
             self.cursor.close()
         if self.connection:
