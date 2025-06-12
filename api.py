@@ -26,6 +26,7 @@ from lib.validation_rules import (
     validate_house_number
 )
 
+
 # logging.basicConfig(
 #     level=logging.INFO,  # lub DEBUG, jeśli chcesz więcej szczegółów
 #     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -360,6 +361,130 @@ async def fetch_orders(auth_user: AuthUser = Depends(verify_token)):
 
     except Exception as e:
         logging.error(f"Failed to fetch orders for worker {auth_user.user_id}: {e}")
+        db.close()
+        return {"status": "error", "message": str(e)}
+
+"""
+Fetching all users endpoint
+"""
+@app.get("/all_users/")
+async def get_all_users(auth_user: AuthUser = Depends(verify_token)):
+    # Only OWNER has access to user data
+    if auth_user.user_role != "OWNER":
+        raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can view user data.")
+
+    db = DatabaseManager()
+    try:
+        rows = db.fetch_all("""
+            SELECT id, username, first_name, last_name, email, role, city 
+            FROM users
+            ORDER BY last_name, first_name
+        """)
+        db.close()
+
+        users = [
+            {
+                "id": str(row[0]),
+                "username": row[1],
+                "first_name": row[2],
+                "last_name": row[3],
+                "email": row[4],
+                "role": row[5],
+                "city": row[6]
+            }
+            for row in rows
+        ]
+
+        return {
+            "status": "success",
+            "message": f"Fetched {len(users)} users.",
+            "users": users
+        }
+
+    except Exception as e:
+        logging.error(f"Failed to fetch users: {e}")
+        db.close()
+        return {"status": "error", "message": str(e)}
+    
+"""
+Promote user to WORKER role endpoint
+"""
+@app.put("/users/{username}/promote")
+async def promote_user(username: str, auth_user: AuthUser = Depends(verify_token)):
+    # Only OWNER can promote users
+    if auth_user.user_role != "OWNER":
+        raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can promote users.")
+    
+    db = DatabaseManager()
+    try:
+        # Check if user exists
+        user = db.fetch_one("SELECT id, city FROM users WHERE username = %s", (username,))
+        if not user:
+            return {"status": "error", "message": f"User '{username}' not found."}
+        
+        user_id, city = user[0], user[1]
+        
+        # Update the user's role to WORKER
+        db.execute_query("UPDATE users SET role = 'WORKER' WHERE id = %s", (user_id,))
+        
+        # Check if an employee record exists, create one if not
+        employee = db.fetch_one("SELECT user_id FROM employees WHERE user_id = %s", (user_id,))
+        if not employee:
+            if not city:
+                return {"status": "error", "message": "User has no city defined. Cannot promote."}
+                
+            # Create employee record
+            db.execute_query(
+                "INSERT INTO employees (user_id, worker_role, city) VALUES (%s, %s, %s)",
+                (user_id, "WORKER", city)
+            )
+        else:
+            # Update existing employee record
+            db.execute_query(
+                "UPDATE employees SET worker_role = 'WORKER' WHERE user_id = %s",
+                (user_id,)
+            )
+        
+        db.close()
+        return {"status": "success", "message": f"User '{username}' promoted to WORKER."}
+    
+    except Exception as e:
+        logging.error(f"Failed to promote user {username}: {e}")
+        db.close()
+        return {"status": "error", "message": str(e)}
+
+"""
+Demote user to USER role endpoint
+"""
+@app.put("/users/{username}/demote")
+async def demote_user(username: str, auth_user: AuthUser = Depends(verify_token)):
+    # Only OWNER can demote users
+    if auth_user.user_role != "OWNER":
+        raise HTTPException(status_code=403, detail="Insufficient permissions. Only owners can demote users.")
+    
+    db = DatabaseManager()
+    try:
+        # Check if user exists
+        user = db.fetch_one("SELECT id FROM users WHERE username = %s", (username,))
+        if not user:
+            return {"status": "error", "message": f"User '{username}' not found."}
+        
+        user_id = user[0]
+        
+        # Update the user's role to USER
+        db.execute_query("UPDATE users SET role = 'USER' WHERE id = %s", (user_id,))
+        
+        # Update employee record if it exists
+        db.execute_query(
+            "UPDATE employees SET worker_role = 'USER' WHERE user_id = %s",
+            (user_id,)
+        )
+        
+        db.close()
+        return {"status": "success", "message": f"User '{username}' demoted to USER."}
+    
+    except Exception as e:
+        logging.error(f"Failed to demote user {username}: {e}")
         db.close()
         return {"status": "error", "message": str(e)}
 
