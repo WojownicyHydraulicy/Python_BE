@@ -2,3 +2,6 @@
 service_account_key.json
 __pycache__/
 docs/
+vscode/
+# Ignore Python cache files
+*.pyc
